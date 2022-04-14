@@ -339,6 +339,7 @@ def population_stratification(step):
     
         command(f"Rscript ../Rscripts/MDS_merged.R {f}_{step}.mds pop.pdf")
         print('Population MDS displayed in "pop.pdf" file, please check and specify desired cut-offs')
+        command("open pop.pdf")
         while True:
             try:
                 low_lim = float(input(" Insert upper threshold on MDS component 1: "))
@@ -445,4 +446,4 @@ if __name__ == '__main__':
             
             command(f"rm {pop_f}_*")           
     
-    print("DONE! You can proced to imputation with 'read_rgl.py'")
+    print("DONE! You can proceed to imputation with 'imp_pheno.py'")
