@@ -64,8 +64,8 @@ def gather_inputs():
         print("Population information file not found, skipping...")
         panel_f = ''
 
-    if not os.path.isfile('../inversion.txt'): 
-        print('Put "inversion,txt" in the parent directory before proceeding')    
+    if not os.path.isfile('inversion.txt'): 
+        print('Put "inversion.txt" in the parent directory before proceeding')    
         quit()
         
     rscripts = True
