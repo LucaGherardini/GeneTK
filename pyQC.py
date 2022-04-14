@@ -339,7 +339,6 @@ def population_stratification(step):
     
         command(f"Rscript ../Rscripts/MDS_merged.R {f}_{step}.mds pop.pdf")
         print('Population MDS displayed in "pop.pdf" file, please check and specify desired cut-offs')
-        command("open pop.pdf")
         while True:
             try:
                 low_lim = float(input(" Insert upper threshold on MDS component 1: "))
@@ -350,7 +349,7 @@ def population_stratification(step):
                 continue
             break
         command("awk '{if($4 < " + str(low_lim) + " && $5 > " + str(high_lim) + ") print $1,$2}' " + f + '_' + str(step) + ".mds > filtered_subj")  
-        command(f"mv {f}_{step}.mds pop.pdf {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex QC_{phase}/")  
+        command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex QC_{phase}/")  
         
         print("Filtering population from the original dataset")
         # Remove individuals from the pre-merged dataset (original_f)
@@ -359,10 +358,12 @@ def population_stratification(step):
         step += 1
         
         # Showing updated (original) population
+        command(f"plink --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --genome --out {f}_{step}")
+        command(f"plink --threads {threads} --bfile {f}_{step} --read-genome {f}_{step}.genome --cluster --mds-plot 10 --out {f}_{step}")
         command("awk '{print$1,$2,\"OWN\"}' " + f + '_' + str(step) + '.fam > racefile_own.txt')
         command(f"cat race_1kG{panel_step}.txt racefile_own.txt | sed -e '1i\\FID IID race' > racefile.txt")
         command(f"Rscript ../Rscripts/MDS_merged.R {f}_{step}.mds filtered.pdf")
-        command(f"mv {f}_{step}.log {f}_{step}.cluster* filtered.pdf {f}_{step}.mds race*txt QC_{phase}/")
+        command(f"mv {f}_{step}.mds {f}_{step}.log {f}_{step}.cluster* filtered.pdf {f}_{step}.mds race*txt QC_{phase}/")
         print('Filtered original population displayed in "filtered.pdf" file')
     
     return step
