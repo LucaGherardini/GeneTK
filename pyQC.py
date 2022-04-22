@@ -112,6 +112,19 @@ def missingness(step):
     return step
 
 def sex_discrepancy(step):
+    try:
+        choice = int(input("Do you want to try to impute missing sex it [0, default]? "))
+    except Exception as e:
+        choice = 0
+    
+    if choice == 0:
+        print("--- STEP " +str(step))
+        print("Imputing sex discrepancies")
+        command(f"plink --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
+        step += 1 
+        command(f"mv {f}_{step}.log {f}_{step}.hh QC_{phase}/")
+    
+    # check for still ambiguous sex
     command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
     if rscripts:
         command("Rscript ../Rscripts/gender_check.R")
@@ -127,21 +140,27 @@ def sex_discrepancy(step):
     return step
 
 def maf(step):
-    command("awk '{ if ($1 >= 1 && $1 <= 22) print $2 }' " + f+'_'+str(step)+'.bim' + " > snp_1_22.txt")
     print("--- STEP " +str(step))
+    command("awk '{ if ($1 >= 1 && $1 <= 22) print $2 }' " + f+'_'+str(step)+'.bim' + " > snp_1_22.txt")
     print("Extraction of SNPs chr 1~22")
     command(f"plink --threads {threads} --bfile {f}_{step} --extract snp_1_22.txt --make-bed --out {f}_{step+1}")
     step += 1
     command(f"mv {f}_{step}.log snp_1_22.txt QC_{phase}/")
-
+    
+    try:
+        maf_threshold = float(input("Insert the MAF threshold you want to use [0, default]: "))
+    except Exception as e:
+        maf_threshold = 0.0
+        
     if rscripts:
         command(f"plink --threads {threads} --bfile {f}_{step} --freq --out MAF_check")
         command("Rscript ../Rscripts/MAF_check.R")
 
-    print("--- STEP " +str(step))
-    print("MAF filtering 0.02")
-    command(f"plink --threads {threads} --bfile {f}_{step} --maf 0.02 --make-bed --out {f}_{step+1}")
-    step += 1
+    if maf_threshold > 0.0:
+        print("--- STEP " +str(step))
+        print(f"MAF filtering {maf_threshold}")
+        command(f"plink --threads {threads} --bfile {f}_{step} --maf {maf_threshold} --make-bed --out {f}_{step+1}")
+        step += 1
     command(f"mv {f}_{step}.log MAF_* QC_{phase}/")
     
     return step
@@ -160,7 +179,7 @@ def hwe(step):
     return step
 
 def heterozygosity(step):
-    command(f"plink --threads {threads} --bfile {f}_{step} --exclude inversion.txt --range --indep-pairwise 50 5 0.2 --out indepSNP")
+    command(f"plink --threads {threads} --bfile {f}_{step} --exclude range inversion.txt --indep-pairwise 50 5 0.2 --out indepSNP")
     command(f"plink --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --het --out R_check")
     if rscripts:
         command("Rscript ../Rscripts/check_heterozygosity_rate.R")
@@ -439,6 +458,7 @@ if __name__ == '__main__':
         command(f"rm {f}_*.bim")
         command(f"rm {f}_*.bed")
         command(f"rm {f}_*.fam")
+        command(f"rm {f}_*.hh")
         
         if len(pop_f)>0:
             # created during merging
