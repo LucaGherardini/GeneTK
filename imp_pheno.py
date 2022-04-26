@@ -18,9 +18,9 @@ out_file = base_name + '_subj_list.txt'
 status_phenotype = {
     "CN": 1,
     "EMCI": 2,
-    "MCI": 3,
-    "LMCI": 4,
-    "AD": 5    
+    "MCI": 2,
+    "LMCI": 2,
+    "AD": 3    
 }
 
 with open(fam_file, 'r') as in_fam:
