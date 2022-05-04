@@ -21,10 +21,10 @@ def remove(file):
 def print_info(phase, file):
     logging.info(f'*****[{phase}]*****')
     output = Popen(f"cat {file}.fam | wc -l", shell=True, stdout=PIPE)
-    output = str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split(' ')[-1]
+    output = str(output.stdout.read()).lstrip('b\'').rstrip('\'').rstrip('\\n').split(' ')[-1]
     logging.info(f"Individuals: {output}")
     output = Popen(f"cat {file}.bim | wc -l", shell=True, stdout=PIPE)
-    output = str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split(' ')[-1]
+    output = str(output.stdout.read()).lstrip('b\'').rstrip('\'').rstrip('\\n').split(' ')[-1]
     logging.info(f"SNPs: {output}")
     
 def mkdir(phase):    
@@ -249,10 +249,10 @@ def cryptic_relatedness(step, rm_tmp):
         
         sub1_fam, sub1_id, sub2_fam, sub2_id = line.split(' ')
         output = Popen(f"cat plink.imiss | grep {sub1_fam+sub1_id}", shell=True, stdout=PIPE)
-        sub1_fmiss = str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split(' ')[-1]
+        sub1_fmiss = str(output.stdout.read()).lstrip('b\'').rstrip('\'').rstrip('\\n').split(' ')[-1]
         
         output = Popen(f"cat plink.imiss | grep {sub2_fam+sub2_id}", shell=True, stdout=PIPE)
-        sub2_fmiss = str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split(' ')[-1]
+        sub2_fmiss = str(output.stdout.read()).lstrip('b\'').rstrip('\'').rstrip('\\n').split(' ')[-1]
         if sub1_fmiss > sub2_fmiss:
             low_call.write(sub1_fam + ' ' + sub1_id)
         else:
