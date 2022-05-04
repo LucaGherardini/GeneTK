@@ -57,5 +57,13 @@ for cat in status_phenotype.keys():
     os.system("awk '{ if ($6 == \"" + str(status_phenotype[cat]) + "\") print $1, $2, \"" + cat + "\"}' " + fam_file + " > list_" + cat + ".txt")
     print(f"# {cat} subjects: ")
     os.system(f"cat list_{cat}.txt | wc -l")
+    
+try:
+    prune_pheno = input("Do you want to prune missing phenotypes [Y/n]?")
+except Exception:
+    prune_pheno = 'Y'
+
+if prune_pheno != 'n' and prune_pheno != 'N':
+    os.system(f"plink --bfile {base_name} --prune --make-just-fam --out {base_name}")
 
 print('*** Done ***')
