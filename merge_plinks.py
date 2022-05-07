@@ -8,10 +8,11 @@ print(max_number)
 base = "p_0"
 merge_number = 1
 for k in range(1, max_number-1):
-    os.system(f"plink --bfile {base} --bmerge p_{k} --make-bed --out tmp")
-    os.system(f"plink --bfile {base} --flip tmp-merge.missnp --make-bed --out {base}_f")
-    
-    os.system(f"plink --bfile {base}_f --bmerge p_{k} --make-bed --out m_{merge_number}")
+    os.system(f"plink --bfile {base} --bmerge p_{k} --make-bed --out m_{merge_number}")
+    if os.path.isfile('m_'+str(merge_number)+'-merge.missnp'):
+        os.system(f"plink --bfile {base} --flip m_{merge_number}-merge.missnp --make-bed --out {base}_f")
+        os.system(f"plink --bfile {base}_f --bmerge p_{k} --make-bed --out m_{merge_number}")
+
     #os.system(f"rm p_{k+1} tmp* {base}*")
     base = "m_"+str(merge_number)
     merge_number += 1

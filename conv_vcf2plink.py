@@ -1,16 +1,10 @@
 import os
 import sys 
 from subprocess import Popen, PIPE, STDOUT
-
-
-if len(sys.argv)<2:
-    stem = input('Insert the stem: ')
-else:
-    stem = sys.argv[1]
     
 part_number = 0
 
-output = Popen(f"find . -name \'{stem}*.vcf\'", shell=True, stdout=PIPE)
+output = Popen(f"find . -name \'*.vcf\'", shell=True, stdout=PIPE)
 files = str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split('\\n')
 print(files)
 for f in files:
