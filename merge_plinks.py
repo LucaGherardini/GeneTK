@@ -1,18 +1,19 @@
 import os
+import sys
 from subprocess import Popen, PIPE, STDOUT
-    
-stem = 'Insert stem: '
-output = Popen(f"find . -name \'{stem}*.bed\' | wc -l", shell=True, stdout=PIPE)
-max_number = int(str(output.stdout.read()).removeprefix('b\'').removesuffix('\'').removesuffix('\\n').split('\\n')[0])
-print(max_number)
-base = stem+"1"
-merge_number = 1
-for k in range(1, max_number-1):
-    os.system(f"plink --bfile {base} --bmerge {stem}{k} --make-bed --out m{merge_number}")
-    if os.path.isfile('m_'+str(merge_number)+'-merge.missnp'):
-        os.system(f"plink --bfile {base} --flip m_{merge_number}-merge.missnp --make-bed --out {base}_f")
-        os.system(f"plink --bfile {base}_f --bmerge p_{k} --make-bed --out m_{merge_number}")
 
-    #os.system(f"rm p_{k+1} tmp* {base}*")
-    base = "m_"+str(merge_number)
-    merge_number += 1
+
+stem = input('Insert stem: ') if len(sys.argv) < 2 else sys.argv[1]
+output = Popen(f"find . -name \'{stem}*.bed\'", shell=True, stdout=PIPE)
+files = str(output.stdout.read()).replace('b\'', '').replace("\'", '').replace('./', '').replace('.bed', '').removesuffix('\\n').split('\\n')
+if len(files)< 2:
+    print("Less than 2 files found, nothing to merge")
+    quit()
+    
+merge_list = open('merge_list.txt', 'w')
+for k in range(0, len(files)):
+    merge_list.write(files[k] + '\n')
+merge_list.close()    
+    
+os.system(f"plink --merge-list merge_list.txt --make-bed --out merge")
+print("Done! File 'merge' wrote")
