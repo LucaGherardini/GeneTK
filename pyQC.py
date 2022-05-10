@@ -5,6 +5,10 @@ import multiprocessing
 from subprocess import Popen, PIPE, STDOUT
 import logging
 
+"""
+SYNOPSYS:
+python3 pyQC.py <baseline> <threads_number> <Population_file> <Population_panel> <sex_strat> <MAF_threshold> <remove_tmp>
+"""
 
 def command(command):
     # if a command doesn't redirect output, redirect on log to keep terminal clean
@@ -33,6 +37,15 @@ def mkdir(phase):
         os.system(f"mkdir QC_{phase}")
 
 def gather_inputs():
+    if not os.path.isfile('inversion.txt'): 
+        print('Put "inversion.txt" in the parent directory before proceeding')    
+        quit()
+    
+    rscripts = True
+    if not os.path.isdir('Rscripts'):
+        print('Set a "Rscript" folder containing R scripts used for intermediate results (optional)')
+        rscripts = False   
+    
     if len(sys.argv)<2:
         try:
             f = input("Insert baseline: ")
@@ -71,39 +84,49 @@ def gather_inputs():
         
     try:
         if len(sys.argv) < 5:
-            panel_f = input('Insert the auxiliary file for population information related to population file (PLINK format)[optional]: ')
+            panel_f = input('Insert the panel file for population information related to population file (PLINK format)[optional]: ')
         else:
             panel_f = sys.argv[4]
     except Exception as e:
         panel_f = ''
-
+    
     if not os.path.isfile(panel_f):
         print("Population information file not found, skipping...")
         panel_f = ''
-
-    if not os.path.isfile('inversion.txt'): 
-        print('Put "inversion.txt" in the parent directory before proceeding')    
-        quit()
-        
-    rscripts = True
-    if not os.path.isdir('../Rscripts/'):
-        print('Set a "Rscript" folder containing R scripts used for intermediate results (optional)')
-        rscripts = False
-        
-    try:
-        rm_tmp = input("Do you want to remove intermediate PLINK file during QC(.bim/.bed/.fam)[Y/n]?")
-        if len(rm_tmp) < 1 or rm_tmp.upper() != 'N': raise Exception
-    except Exception as e:
-        rm_tmp = 'Y'
-    rm_tmp = rm_tmp.upper()     
     
-    return f, threads, pop_f, panel_f, rscripts, rm_tmp
+    try:
+        if len(sys.argv) < 6:
+            sex_strat = int(input("Insert sex discrepancy strategy [default is 0: impute sex, -1 don't check, otherwise remove sex discrepancy]: "))
+        else:
+            sex_strat = int(sys.argv[5])
+    except Exception as e:
+        sex_strat = 0
+    
+    try:
+        if len(sys.argv) < 7:
+            maf_threshold = float(input("Insert the MAF threshold you want to use [default if 0.01]: "))
+        else:
+            maf_threshold = float(sys.argv[6])
+    except Exception as e:
+        maf_threshold = 0.01
+        
+    if len(sys.argv) < 8:
+        try:
+            rm_tmp = input("Do you want to remove intermediate PLINK file during QC(.bim/.bed/.fam)[Y/n]?")
+            if len(rm_tmp) < 1 or rm_tmp.upper() != 'N': raise Exception
+        except Exception as e:
+            rm_tmp = 'Y'
+    else:
+        rm_tmp = sys.argv[7]
+    rm_tmp = rm_tmp.upper()  
+    
+    return f, threads, pop_f, panel_f, sex_strat, maf_threshold, rscripts, rm_tmp
 
 def missingness(step, rm_tmp):   
     # Analysis of Missingness
     if rscripts:
         command(f"plink --threads {threads} --bfile {f} --missing")
-        command("Rscript ../Rscripts/hist_miss.R")
+        command("Rscript Rscripts/hist_miss.R")
         command(f"mv plink.log plink.hh plink.imiss plink.lmiss histlmiss.pdf histimiss.pdf QC_{phase}")
 
     # Delete SNPs with missingness >0.2
@@ -138,13 +161,9 @@ def missingness(step, rm_tmp):
     
     return step
 
-def sex_discrepancy(step, rm_tmp):
-    try:
-        choice = int(input("Do you want to try to impute missing sex it [0, default]? "))
-    except Exception as e:
-        choice = 0
-    
-    if choice == 0:
+def sex_discrepancy(step, rm_tmp, sex_imputation):
+    # impute sex    
+    if sex_imputation == 0:
         print("--- STEP " +str(step))
         print("Imputing sex discrepancies")
         command(f"plink --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
@@ -153,10 +172,10 @@ def sex_discrepancy(step, rm_tmp):
         command(f"mv {f}_{step}.log {f}_{step}.hh QC_{phase}/")
     
     # check for ambiguous sex
-    else:
+    elif sex_imputation > 0:
         command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
         if rscripts:
-            command("Rscript ../Rscripts/gender_check.R")
+            command("Rscript Rscripts/gender_check.R")
             command(f"mv Gender_check.pdf Men_check.pdf Women_check.pdf  QC_{phase}/")
 
         command("grep \"PROBLEM\" plink.sexcheck | awk '{print$1,$2}' > sex_discrepancy.txt")
@@ -164,13 +183,13 @@ def sex_discrepancy(step, rm_tmp):
         print("Remotion of sex discrepancies")
         command(f"plink --threads {threads} --bfile {f}_{step} --remove sex_discrepancy.txt --make-bed --out {f}_{step+1}")
         
-    if rm_tmp == 'Y': remove(f"{f}_{step}")
-    step += 1
-    command(f"mv {f}_{step}.log {f}_{step}.hh sex_discrepancy.txt plink.sexcheck QC_{phase}/")
+        if rm_tmp == 'Y': remove(f"{f}_{step}")
+        step += 1
+        command(f"mv {f}_{step}.log {f}_{step}.hh sex_discrepancy.txt plink.sexcheck QC_{phase}/")
     
     return step
 
-def maf(step, rm_tmp):
+def maf(step, rm_tmp, maf_threshold):
     print("--- STEP " +str(step))
     command("awk '{ if ($1 >= 1 && $1 <= 22) print $2 }' " + f+'_'+str(step)+'.bim' + " > snp_1_22.txt")
     print("Extraction of SNPs chr 1~22")
@@ -178,15 +197,10 @@ def maf(step, rm_tmp):
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
     command(f"mv {f}_{step}.log snp_1_22.txt QC_{phase}/")
-    
-    try:
-        maf_threshold = float(input("Insert the MAF threshold you want to use [0, default]: "))
-    except Exception as e:
-        maf_threshold = 0.0
         
     if rscripts:
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --freq --out MAF_check")
-        command("Rscript ../Rscripts/MAF_check.R")
+        command("Rscript Rscripts/MAF_check.R")
 
     if maf_threshold > 0.0:
         print("--- STEP " +str(step))
@@ -202,7 +216,7 @@ def hwe(step, rm_tmp):
     if rscripts:
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --hardy")
         command("awk '{ if ($9 < 0.00001) print $0 }' plink.hwe > plinkzoomhwe.hwe")
-        command("Rscript ../Rscripts/hwe.R")
+        command("Rscript Rscripts/hwe.R")
     print("--- STEP " +str(step))
     print("HWE filtering (p<=1e-10)")
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --hwe 1e-10 include-nonctrl --make-bed --out {f}_{step+1}")
@@ -216,8 +230,8 @@ def heterozygosity(step, rm_tmp):
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --exclude range inversion.txt --indep-pairwise 50 5 0.2 --out indepSNP")
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --het --out R_check")
     if rscripts:
-        command("Rscript ../Rscripts/check_heterozygosity_rate.R")
-        command("Rscript ../Rscripts/heterozygosity_outliers_list.R")
+        command("Rscript Rscripts/check_heterozygosity_rate.R")
+        command("Rscript Rscripts/heterozygosity_outliers_list.R")
     command("sed 's/\"// g' fail-het-qc.txt | awk '{print$1, $2}'> het_fail_ind.txt")
     print("--- STEP " +str(step))
     print("Heterozygosity filtering (- 3 SD from mean)")
@@ -232,7 +246,7 @@ def cryptic_relatedness(step, rm_tmp):
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --genome --min 0.2 --out pihat_min0.2")
     command("awk '{ if ($8 > 0.9) print $0 }' pihat_min0.2.genome>zoom_pihat.genome")
     if rscripts:
-        command("Rscript ../Rscripts/Relatedness.R")
+        command("Rscript Rscripts/Relatedness.R")
         
     print("--- STEP " +str(step))
     print("Cryptic relatedness filtration")
@@ -405,7 +419,7 @@ def population_stratification(step, rm_tmp):
         # Concatenate racefiles
         command(f"cat race_1kG{panel_step}.txt racefile_own.txt | sed -e '1i\\FID IID race' > racefile.txt")
     
-        command(f"Rscript ../Rscripts/MDS_merged.R {f}_{step}.mds pop.pdf")
+        command(f"Rscript Rscripts/MDS_merged.R {f}_{step}.mds pop.pdf")
         print('Population MDS displayed in "pop.pdf" file, please check and specify desired cut-offs')
         while True:
             try:
@@ -431,7 +445,7 @@ def population_stratification(step, rm_tmp):
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --read-genome {f}_{step}.genome --cluster --mds-plot 10 --out {f}_{step}")
         command("awk '{print$1,$2,\"OWN\"}' " + f + '_' + str(step) + '.fam > racefile_own.txt')
         command(f"cat race_1kG{panel_step}.txt racefile_own.txt | sed -e '1i\\FID IID race' > racefile.txt")
-        command(f"Rscript ../Rscripts/MDS_merged.R {f}_{step}.mds filtered.pdf")
+        command(f"Rscript Rscripts/MDS_merged.R {f}_{step}.mds filtered.pdf")
         command(f"mv {f}_{step}.mds {f}_{step}.log {f}_{step}.cluster* filtered.pdf {f}_{step}.mds race*txt QC_{phase}/")
         print('Filtered original population displayed in "filtered.pdf" file')
     
@@ -449,7 +463,7 @@ def mds_covariates(step):
 if __name__ == '__main__':
     start_time = datetime.today()
     logging.basicConfig(format='%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s', datefmt='%Y-%m-%d,%H:%M:%S', level=logging.INFO, filename = f"trace_{start_time.strftime('%Y-%m-%d-%H:%M:%S')}.log")
-    f, threads, pop_f, panel_f, rscripts, rm_tmp = gather_inputs()
+    f, threads, pop_f, panel_f, sex_strat, maf_threshold, rscripts, rm_tmp = gather_inputs()
 
     step = 1
 
@@ -462,14 +476,14 @@ if __name__ == '__main__':
     ## PHASE 2 (Sex discrepancy)
     phase = 2
     mkdir(phase)
-    step = sex_discrepancy(step, rm_tmp)
+    step = sex_discrepancy(step, rm_tmp, sex_strat)
     print_info(phase, f"{f}_{step}")
 
 
     ## PHASE 3 (MAF filtration)
     phase = 3
     mkdir(phase)
-    step = maf(step, rm_tmp)
+    step = maf(step, rm_tmp, maf_threshold)
     print_info(phase, f"{f}_{step}")
 
     ## PHASE 4 (Hardy-Weinberg Equilibrium)
@@ -500,7 +514,7 @@ if __name__ == '__main__':
     ## PHASE 8 (MDS Covariates)
     phase = 8
     mkdir(phase)
-    step = mds_covariates(step, rm_tmp)  
+    step = mds_covariates(step)  
     print_info(phase, f"{f}_{step}")
         
     command(f"mv {f}_{step}.fam {f}-QC.fam")
