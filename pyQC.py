@@ -517,10 +517,10 @@ if __name__ == '__main__':
     step = mds_covariates(step)  
     print_info(phase, f"{f}_{step}")
         
-    command(f"mv {f}_{step}.fam {f}-QC.fam")
-    command(f"mv {f}_{step}.bim {f}-QC.bim")
-    command(f"mv {f}_{step}.bed {f}-QC.bed")
-    print(f'QC completed, the final file is {f}-QC')
+    command(f"mv {f}_{step}.fam QC_{f}.fam")
+    command(f"mv {f}_{step}.bim QC_{f}.bim")
+    command(f"mv {f}_{step}.bed QC_{f}.bed")
+    print(f'QC completed, the final files are QC_{f}')
     
     if rm_tmp == 'Y' and len(pop_f)>0:
         # created during merging
