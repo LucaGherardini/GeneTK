@@ -33,8 +33,8 @@ def print_info(phase, file):
     
 def mkdir(phase):    
     print(f"Phase {phase}")
-    if not os.path.isdir(f"QC_{phase}"):
-        os.system(f"mkdir QC_{phase}")
+    if not os.path.isdir(f"Phase_{phase}"):
+        os.system(f"mkdir Phase_{phase}")
 
 def gather_inputs():
     if not os.path.isfile('inversion.txt'): 
@@ -127,13 +127,13 @@ def missingness(step, rm_tmp):
     if rscripts:
         command(f"plink --threads {threads} --bfile {f} --missing")
         command("Rscript Rscripts/hist_miss.R")
-        command(f"mv plink.log plink.hh plink.imiss plink.lmiss histlmiss.pdf histimiss.pdf QC_{phase}")
+        command(f"mv plink.log plink.hh plink.imiss plink.lmiss histlmiss.pdf histimiss.pdf Phase_{phase}")
 
     # Delete SNPs with missingness >0.2
     print("--- STEP " +str(step))
     print("Delete SNPs with missingness > 0.2")
     command(f"plink --threads {threads} --bfile {f} --geno 0.2 --make-bed --out {f}_{step}")
-    command(f"mv {f}_{step}.hh {f}_{step}.log QC_{phase}/")
+    command(f"mv {f}_{step}.hh {f}_{step}.log Phase_{phase}/")
 
     # Delete Individuals with missingness >0.2 
     print("--- STEP " +str(step))
@@ -141,7 +141,7 @@ def missingness(step, rm_tmp):
     command(f"plink --threads {threads} --bfile {f}_{step} --mind 0.2 --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.hh {f}_{step}.log QC_{phase}/")
+    command(f"mv {f}_{step}.hh {f}_{step}.log Phase_{phase}/")
 
     # Delete SNPs with missingness >0.02
     print("--- STEP " +str(step))
@@ -149,7 +149,7 @@ def missingness(step, rm_tmp):
     command(f"plink --threads {threads} --bfile {f}_{step} --geno 0.02 --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.hh {f}_{step}.log QC_{phase}/")
+    command(f"mv {f}_{step}.hh {f}_{step}.log Phase_{phase}/")
 
     # Delete individuals with missingness >0.02
     print("--- STEP " +str(step))
@@ -157,11 +157,12 @@ def missingness(step, rm_tmp):
     command(f"plink --threads {threads} --bfile {f}_{step} --mind 0.02 --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.hh {f}_{step}.irem {f}_{step}.log QC_{phase}/")
+    command(f"mv {f}_{step}.hh {f}_{step}.irem {f}_{step}.log Phase_{phase}/")
     
     return step
 
 def sex_discrepancy(step, rm_tmp, sex_imputation):
+
     # impute sex    
     if sex_imputation == 0:
         print("--- STEP " +str(step))
@@ -169,14 +170,16 @@ def sex_discrepancy(step, rm_tmp, sex_imputation):
         command(f"plink --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1 
-        command(f"mv {f}_{step}.log {f}_{step}.hh QC_{phase}/")
+        command(f"mv {f}_{step}.log {f}_{step}.hh plink.sexcheck Phase_{phase}/")
     
     # check for ambiguous sex
-    elif sex_imputation > 0:
-        command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
-        if rscripts:
-            command("Rscript Rscripts/gender_check.R")
-            command(f"mv Gender_check.pdf Men_check.pdf Women_check.pdf  QC_{phase}/")
+    command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
+    if rscripts:
+        command("Rscript Rscripts/gender_check.R")
+        command(f"mv Gender_check.pdf Men_check.pdf Women_check.pdf  Phase_{phase}/")
+    
+    # remove ambiguous sex
+    elif sex_imputation >0:
 
         command("grep \"PROBLEM\" plink.sexcheck | awk '{print$1,$2}' > sex_discrepancy.txt")
         print("--- STEP " +str(step))
@@ -185,7 +188,7 @@ def sex_discrepancy(step, rm_tmp, sex_imputation):
         
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-        command(f"mv {f}_{step}.log {f}_{step}.hh sex_discrepancy.txt plink.sexcheck QC_{phase}/")
+        command(f"mv {f}_{step}.log {f}_{step}.hh sex_discrepancy.txt plink.sexcheck Phase_{phase}/")
     
     return step
 
@@ -196,7 +199,7 @@ def maf(step, rm_tmp, maf_threshold):
     command(f"plink --allow-no-sex --threads {threads} --bfile {f}_{step} --extract snp_1_22.txt --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.log snp_1_22.txt QC_{phase}/")
+    command(f"mv {f}_{step}.log snp_1_22.txt Phase_{phase}/")
         
     if rscripts:
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --freq --out MAF_check")
@@ -208,7 +211,7 @@ def maf(step, rm_tmp, maf_threshold):
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --maf {maf_threshold} --make-bed --out {f}_{step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-    command(f"mv {f}_{step}.log MAF_* QC_{phase}/")
+    command(f"mv {f}_{step}.log MAF_* Phase_{phase}/")
     
     return step
 
@@ -222,7 +225,7 @@ def hwe(step, rm_tmp):
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --hwe 1e-10 include-nonctrl --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.log histhwe* plink.hwe plinkzoomhwe.hwe QC_{phase}/")
+    command(f"mv {f}_{step}.log histhwe* plink.hwe plinkzoomhwe.hwe Phase_{phase}/")
     
     return step
 
@@ -238,7 +241,7 @@ def heterozygosity(step, rm_tmp):
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --remove het_fail_ind.txt --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1 
-    command(f"mv {f}_{step}.log fail-het-qc.txt heterozygosity* het_fail_ind.txt indepSNP.log indepSNP.prune.out R_check* QC_{phase}/")
+    command(f"mv {f}_{step}.log fail-het-qc.txt heterozygosity* het_fail_ind.txt indepSNP.log indepSNP.prune.out R_check* Phase_{phase}/")
     
     return step
 
@@ -276,14 +279,14 @@ def cryptic_relatedness(step, rm_tmp):
         low_call.write('\n')
     low_call.close()    
 
-    command(f"mv pihat* relatedness.pdf zoom_pihat.genome {f}_{step}.log plink.* pairs.txt QC_{phase}/")
+    command(f"mv pihat* relatedness.pdf zoom_pihat.genome {f}_{step}.log plink.* pairs.txt Phase_{phase}/")
 
     print("--- STEP " +str(step))
     print("Remotion of related individuals with lowest call rates")
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --remove 0.2_low_call_rate_pihat.txt --make-bed --out {f}_{step+1}")
     if rm_tmp == 'Y': remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.log  0.2_low_call_rate_pihat.txt QC_{phase}/")
+    command(f"mv {f}_{step}.log  0.2_low_call_rate_pihat.txt Phase_{phase}/")
     
     return step
 
@@ -295,72 +298,72 @@ def population_stratification(step, rm_tmp):
     if rscripts:
         print("Preprocessing of population file")
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f} --geno 0.2 --allow-no-sex --make-bed --out {pop_f}_{pop_step}")
-        command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
         
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.2 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
         
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --geno 0.02 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
         
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.02 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
         
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --maf 0.05 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
         
         print("Uniforming SNPs between the two populations")
         command("awk '{print$2}' " + f + '_' + str(step) + ".bim > " + f + '_' + str(step) + "_SNPs.txt")
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --extract {f}_{step}_SNPs.txt --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {f}_{step}_SNPs.txt {pop_f}_{pop_step}.log QC_{phase}/")
+        command(f"mv {f}_{step}_SNPs.txt {pop_f}_{pop_step}.log Phase_{phase}/")
         
         command("awk '{print$2}' " + pop_f + '_' + str(pop_step) + ".bim > " + pop_f + '_' + str(pop_step) + '_SNPs.txt')
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --extract {pop_f}_{pop_step}_SNPs.txt --recode --make-bed --out {f}_{step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-        command(f"mv {f}_{step}.log {pop_f}_{pop_step}_SNPs.txt QC_{phase}/")
+        command(f"mv {f}_{step}.log {pop_f}_{pop_step}_SNPs.txt Phase_{phase}/")
         
         print("Updating build")
         command("awk '{print$2,$4}' " + f + '_' + str(step) + '.map > buildmap.txt')
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --update-map buildmap.txt --make-bed --out {pop_f}_{pop_step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
-        command(f"mv {pop_f}_{pop_step}.log buildmap.txt QC_{phase}/")
+        command(f"mv {pop_f}_{pop_step}.log buildmap.txt Phase_{phase}/")
         
         print("Setting reference genome")
         command("awk '{print$2,$5}' " + pop_f + '_' + str(pop_step) + '.bim > pop_ref_list.txt')
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --reference-allele pop_ref_list.txt --make-bed --out {f}_{step+1}")    
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-        command(f"mv {f}_{step}.log QC_{phase}/")
+        command(f"mv {f}_{step}.log Phase_{phase}/")
         
         print("Checking for potential strand issues")
         command("awk '{print$2,$5,$6}' " + pop_f + '_' + str(pop_step) + '.bim > ' + pop_f + '_tmp')
         command("awk '{print$2,$5,$6}' " + f + '_' + str(step) + '.bim > ' + f + '_' + str(step) + '_tmp')
         command(f"sort {pop_f}_tmp {f}_{step}_tmp | uniq -u > all_differences.txt")
-        command(f"mv {f}_{step}_tmp QC_{phase}/")
+        command(f"mv {f}_{step}_tmp Phase_{phase}/")
         
         print("Flipping SNPs for resolving strand issues")
         command("awk '{print$1}' all_differences.txt | sort -u > flip_list.txt")
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --flip flip_list.txt --reference-allele pop_ref_list.txt --make-bed --out {f}_{step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-        command(f"mv all_differences.txt pop_ref_list.txt flip_list.txt {f}_{step}.log QC_{phase}/")
+        command(f"mv all_differences.txt pop_ref_list.txt flip_list.txt {f}_{step}.log Phase_{phase}/")
         
         print("Checking still problematic SNPs")
         command("awk '{print$2,$5,$6}' " + f + '_' + str(step) + '.bim > ' + f + '_' + str(step) + '_tmp')
         command(f"sort {pop_f}_tmp {f}_{step}_tmp | uniq -u > uncorresponding_SNPs.txt")
-        command(f"mv {f}_{step}_tmp QC_{phase}/")
+        command(f"mv {f}_{step}_tmp Phase_{phase}/")
         
         print("Removing problematic SNPs")
         command("awk '{print$1}' uncorresponding_SNPs.txt | sort -u > SNPs_for_exclusion.txt")
@@ -368,7 +371,7 @@ def population_stratification(step, rm_tmp):
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --exclude SNPs_for_exclusion.txt --make-bed --out {pop_f}_{pop_step+1}")
-        command(f"mv {f}_{step}.log uncorresponding_SNPs.txt SNPs_for_exclusion.txt QC_{phase}/")
+        command(f"mv {f}_{step}.log uncorresponding_SNPs.txt SNPs_for_exclusion.txt Phase_{phase}/")
         if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
         pop_step += 1
         
@@ -376,13 +379,13 @@ def population_stratification(step, rm_tmp):
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --bmerge {pop_f}_{pop_step}.bed {pop_f}_{pop_step}.bim {pop_f}_{pop_step}.fam --allow-no-sex --make-bed --out {f}_{step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
-        command(f"mv {f}_{step}.log QC_{phase}/")
+        command(f"mv {f}_{step}.log Phase_{phase}/")
         
         print("MDS")
         # NOTE: step is not incremented because it's just producing genome file
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --genome --out {f}_{step}")
         command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --read-genome {f}_{step}.genome --cluster --mds-plot 10 --out {f}_{step}")
-        command(f"mv {f}_{step}.log QC_{phase}/")
+        command(f"mv {f}_{step}.log Phase_{phase}/")
         
         print("MDS Plot")
         panel_step = 1
@@ -431,12 +434,12 @@ def population_stratification(step, rm_tmp):
                 continue
             break
         command("awk '{if($4 < " + str(low_lim) + " && $5 > " + str(high_lim) + ") print $1,$2}' " + f + '_' + str(step) + ".mds > filtered_subj")  
-        command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex QC_{phase}/")  
+        command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex Phase_{phase}/")  
         
         print("Filtering population from the original dataset")
         # Remove individuals from the pre-merged dataset (original_f)
         command(f"plink --allow-no-sex  --threads {threads} --bfile {original_f} --keep filtered_subj --make-bed --out {f}_{step+1}")
-        command(f"mv filtered_subj QC_{phase}/")
+        command(f"mv filtered_subj Phase_{phase}/")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
         
@@ -446,7 +449,7 @@ def population_stratification(step, rm_tmp):
         command("awk '{print$1,$2,\"OWN\"}' " + f + '_' + str(step) + '.fam > racefile_own.txt')
         command(f"cat race_1kG{panel_step}.txt racefile_own.txt | sed -e '1i\\FID IID race' > racefile.txt")
         command(f"Rscript Rscripts/MDS_merged.R {f}_{step}.mds filtered.pdf")
-        command(f"mv {f}_{step}.mds {f}_{step}.log {f}_{step}.cluster* filtered.pdf {f}_{step}.mds race*txt QC_{phase}/")
+        command(f"mv {f}_{step}.mds {f}_{step}.log {f}_{step}.cluster* filtered.pdf {f}_{step}.mds race*txt Phase_{phase}/")
         print('Filtered original population displayed in "filtered.pdf" file')
     
     return step
@@ -456,7 +459,7 @@ def mds_covariates(step):
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --extract indepSNP.prune.in --genome --out {f}_{step}")
     command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --read-genome {f}_{step}.genome --cluster --mds-plot 10 --out {f}_{step}")
     command("awk '{print$1, $2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13}' " + f + '_' + str(step) + '.mds > covar_mds.txt')
-    command(f"mv {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.log {f}_{step}.mds QC_{phase}/")
+    command(f"mv {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.log {f}_{step}.mds Phase_{phase}/")
     
     return step
 
