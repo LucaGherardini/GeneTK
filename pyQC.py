@@ -1,14 +1,15 @@
+"""
+SYNOPSYS:
+python3 pyQC.py <file> <thrds> <pop_file> <pop_panel> <discard_sex> <MAF_thr> <rm_tmp>
+"""
+
 from datetime import datetime
-import os 
+import os
 import sys
 import multiprocessing
 from subprocess import Popen, PIPE, STDOUT
 import logging
-
-"""
-SYNOPSYS:
-python3 pyQC.py <baseline> <threads_number> <Population_file> <Population_panel> <sex_strat> <MAF_threshold> <remove_tmp>
-"""
+import yaml
 
 def command(command):
     # if a command doesn't redirect output, redirect on log to keep terminal clean
@@ -30,109 +31,100 @@ def print_info(phase, file):
     output = Popen(f"cat {file}.bim | wc -l", shell=True, stdout=PIPE)
     output = str(output.stdout.read()).lstrip('b\'').rstrip('\'').rstrip('\\n').split(' ')[-1]
     logging.info(f"SNPs: {output}")
-    
-def mkdir(phase):    
+
+def mkdir(phase):
     print(f"Phase {phase}")
     if not os.path.isdir(f"QC_{phase}"):
         os.system(f"mkdir QC_{phase}")
 
-def gather_inputs():
+def collect_inputs():
     if not os.path.isfile('inversion.txt'): 
         print('Put "inversion.txt" in the parent directory before proceeding')    
         quit()
-    
+   
     rscripts = True
     if not os.path.isdir('Rscripts'):
         print('Set a "Rscript" folder containing R scripts used for intermediate results (optional)')
-        rscripts = False   
+        rscripts = False    
+         
+    with open('config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
     
-    if len(sys.argv)<2:
-        try:
-            f = input("Insert baseline: ")
-        except Exception as e:
-            print(e)
-            quit()
-    else:
-        f = sys.argv[1]
-        
+    try:
+        f = config['baseline']
+    except Exception as e:
+        print(e)
+        print('Error during reading of baseline name')
+        quit()
     if not os.path.isfile(f+'.bim'):
         print(f"Error: {f} doesn't exist")
-        quit()
-
+        quit()    
+    
     try:
-        if len(sys.argv) < 3:
-            threads = int(input("Number of threads [default all available]: "))
-        else:
-            threads = int(sys.argv[2])
-        
-        if threads <= 0: raise Exception
+        threads = config['cores']
     except Exception as e:
+        print(e)
+        print('Error during reading of cores number, using default (all available)')
         threads = multiprocessing.cpu_count()
-        print(f"{threads} threads will be spawn")
             
     try:
-        if len(sys.argv) < 4:
-            pop_f = input('Insert the auxiliary file for population stratification (PLINK format)[optional]: ')
-        else:
-            pop_f = sys.argv[3]
+        pop_f = config['population_file']
+        panel_f = config['population_panel']
     except Exception as e:
+        print(e)
+        print('Error when reading population files')
         pop_f = ''
+        panel_f = ''
         
-    if not os.path.isfile(pop_f+'.bim'):
-        print("Population file not found, skipping...")
+    if not os.path.isfile(pop_f+'.bim') or not os.path.isfile(panel_f):
+        print("Population files not found, skipping...")
         pop_f = ''
-        
-    try:
-        if len(sys.argv) < 5:
-            panel_f = input('Insert the panel file for population information related to population file (PLINK format)[optional]: ')
-        else:
-            panel_f = sys.argv[4]
-    except Exception as e:
         panel_f = ''
-    
-    if not os.path.isfile(panel_f):
-        print("Population information file not found, skipping...")
-        panel_f = ''
-    
+
     try:
-        if len(sys.argv) < 6:
-            sex_strat = int(input("Insert sex discrepancy strategy [default is 0: impute sex, -1 don't check, otherwise remove sex discrepancy]: "))
-        else:
-            sex_strat = int(sys.argv[5])
+        discard_sex = config['sex_discrepancy_discard']
     except Exception as e:
-        sex_strat = 0
-    
+        print(e)
+        print('Error when reading "sex_discrepancy_discard" option, using False (default)')
+        discard_sex = False
+   
     try:
-        if len(sys.argv) < 7:
-            maf_threshold = float(input("Insert the MAF threshold you want to use [default if 0.01]: "))
-        else:
-            maf_threshold = float(sys.argv[6])
+        maf_threshold = float(config['MAF_threshold'])
     except Exception as e:
+        print(e)
+        print('Error when reading "MAF_threshold" option, using "0.01" (default)')
         maf_threshold = 0.01
+       
+    try:
+        rm_tmp = config['rm_tmp'].upper()
+        if len(rm_tmp) < 1 or rm_tmp != 'N': raise Exception
+    except Exception as e:
+        rm_tmp = 'Y'
         
-    if len(sys.argv) < 8:
-        try:
-            rm_tmp = input("Do you want to remove intermediate PLINK file during QC(.bim/.bed/.fam)[Y/n]?")
-            if len(rm_tmp) < 1 or rm_tmp.upper() != 'N': raise Exception
-        except Exception as e:
-            rm_tmp = 'Y'
-    else:
-        rm_tmp = sys.argv[7]
-    rm_tmp = rm_tmp.upper()  
+    try:
+        sup_lim = float(config['superior_threshold_MDS_1'])
+        inf_lim = float(config['inferior_threshold_MDS_2'])
+    except Exception as e:
+        print(e)
+        print("MDS thresholds will be chosen at runtime")
+        sup_lim = ''
+        inf_lim = ''
     
-    return f, threads, pop_f, panel_f, sex_strat, maf_threshold, rscripts, rm_tmp
+    return f, threads, pop_f, panel_f, discard_sex, maf_threshold, rscripts, rm_tmp, sup_lim, inf_lim, config
 
 def missingness(step, rm_tmp):   
     # Analysis of Missingness
     if rscripts:
-        command(f"plink --threads {threads} --bfile {f} --missing")
+        command(f"plink --threads {threads} --bfile {f}_{step} --missing")
         command("Rscript Rscripts/hist_miss.R")
         command(f"mv plink.log plink.hh plink.imiss plink.lmiss histlmiss.pdf histimiss.pdf QC_{phase}")
 
     # Delete SNPs with missingness >0.2
     print("--- STEP " +str(step))
     print("Delete SNPs with missingness > 0.2")
-    command(f"plink --threads {threads} --bfile {f} --geno 0.2 --make-bed --out {f}_{step}")
+    command(f"plink --threads {threads} --bfile {f}_{step} --geno 0.2 --make-bed --out {f}_{step+1}")
+    if rm_tmp == 'Y': remove(f"{f}_{step}")
+    step += 1
     command(f"mv {f}_{step}.hh {f}_{step}.log QC_{phase}/")
 
     # Delete Individuals with missingness >0.2 
@@ -161,23 +153,23 @@ def missingness(step, rm_tmp):
     
     return step
 
-def sex_discrepancy(step, rm_tmp, sex_imputation):
+def sex_discrepancy(step, rm_tmp, discard_sex):
     # impute sex    
-    if sex_imputation == 0:
-        print("--- STEP " +str(step))
-        print("Imputing sex discrepancies")
-        command(f"plink --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
-        if rm_tmp == 'Y': remove(f"{f}_{step}")
-        step += 1 
-        command(f"mv {f}_{step}.log {f}_{step}.hh QC_{phase}/")
+    print("--- STEP " +str(step))
+    print("Imputing sex discrepancies")
+    command(f"plink --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
+    if rm_tmp == 'Y': remove(f"{f}_{step}")
+    step += 1 
+    command(f"mv {f}_{step}.log {f}_{step}.hh QC_{phase}/")
+    
+    # Sex is checked after imputation or before discarding discrepancies    
+    command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
+    if rscripts:
+        command("Rscript Rscripts/gender_check.R")
+        command(f"mv Gender_check.pdf Men_check.pdf Women_check.pdf  QC_{phase}/")
     
     # check for ambiguous sex
-    elif sex_imputation > 0:
-        command(f"plink --threads {threads} --bfile {f}_{step} --check-sex")
-        if rscripts:
-            command("Rscript Rscripts/gender_check.R")
-            command(f"mv Gender_check.pdf Men_check.pdf Women_check.pdf  QC_{phase}/")
-
+    if discard_sex:
         command("grep \"PROBLEM\" plink.sexcheck | awk '{print$1,$2}' > sex_discrepancy.txt")
         print("--- STEP " +str(step))
         print("Remotion of sex discrepancies")
@@ -287,40 +279,45 @@ def cryptic_relatedness(step, rm_tmp):
     
     return step
 
-def population_stratification(step, rm_tmp):
+def population_stratification(step, rm_tmp, sup_lim, inf_lim):
     pop_step = 1
     original_f = f+'_'+str(step)
+    # a copy is made to maintain the original untouched
+    os.system(f"cp {f}_{step}.bed {f}_{step+1}.bed")
+    os.system(f"cp {f}_{step}.bim {f}_{step+1}.bim")
+    os.system(f"cp {f}_{step}.fam {f}_{step+1}.fam")
+    step += 1
     
     # NOTE: without R scripts, it's useless to merge different populations
     if rscripts:
         print("Preprocessing of population file")
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f} --geno 0.2 --allow-no-sex --make-bed --out {pop_f}_{pop_step}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f} --geno 0.2 --make-bed --out {pop_f}_{pop_step}")
         command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
         
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.2 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.2 --make-bed --out {pop_f}_{pop_step+1}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
         
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --geno 0.02 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --geno 0.02 --make-bed --out {pop_f}_{pop_step+1}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
         
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.02 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.02 --make-bed --out {pop_f}_{pop_step+1}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
         
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --maf 0.05 --allow-no-sex --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --maf 0.05 --make-bed --out {pop_f}_{pop_step+1}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {pop_f}_{pop_step}.log QC_{phase}/")
         
         print("Uniforming SNPs between the two populations")
         command("awk '{print$2}' " + f + '_' + str(step) + ".bim > " + f + '_' + str(step) + "_SNPs.txt")
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --extract {f}_{step}_SNPs.txt --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {f}_{step}_SNPs.txt {pop_f}_{pop_step}.log QC_{phase}/")
         
@@ -333,7 +330,7 @@ def population_stratification(step, rm_tmp):
         print("Updating build")
         command("awk '{print$2,$4}' " + f + '_' + str(step) + '.map > buildmap.txt')
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --update-map buildmap.txt --make-bed --out {pop_f}_{pop_step+1}")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         command(f"mv {pop_f}_{pop_step}.log buildmap.txt QC_{phase}/")
         
@@ -368,12 +365,12 @@ def population_stratification(step, rm_tmp):
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
         command(f"plink --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --exclude SNPs_for_exclusion.txt --make-bed --out {pop_f}_{pop_step+1}")
-        command(f"mv {f}_{step}.log uncorresponding_SNPs.txt SNPs_for_exclusion.txt QC_{phase}/")
-        if rm_tmp == 'Y': remove(f"{f}_{pop_step}")
+        command(f"mv {pop_f}_{pop_step}.log uncorresponding_SNPs.txt SNPs_for_exclusion.txt QC_{phase}/")
+        if rm_tmp == 'Y': remove(f"{pop_f}_{pop_step}")
         pop_step += 1
         
         print("Merge")
-        command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --bmerge {pop_f}_{pop_step}.bed {pop_f}_{pop_step}.bim {pop_f}_{pop_step}.fam --allow-no-sex --make-bed --out {f}_{step+1}")
+        command(f"plink --allow-no-sex  --threads {threads} --bfile {f}_{step} --bmerge {pop_f}_{pop_step}.bed {pop_f}_{pop_step}.bim {pop_f}_{pop_step}.fam --make-bed --out {f}_{step+1}")
         if rm_tmp == 'Y': remove(f"{f}_{step}")
         step += 1
         command(f"mv {f}_{step}.log QC_{phase}/")
@@ -420,17 +417,20 @@ def population_stratification(step, rm_tmp):
         command(f"cat race_1kG{panel_step}.txt racefile_own.txt | sed -e '1i\\FID IID race' > racefile.txt")
     
         command(f"Rscript Rscripts/MDS_merged.R {f}_{step}.mds pop.pdf")
-        print('Population MDS displayed in "pop.pdf" file, please check and specify desired cut-offs')
-        while True:
-            try:
-                low_lim = float(input(" Insert upper threshold on MDS component 1: "))
-                high_lim = float(input("Insert lower threshold on MDS component 2: "))
-            except Exception as e:
-                print(e)
-                print("Retry")
-                continue
-            break
-        command("awk '{if($4 < " + str(low_lim) + " && $5 > " + str(high_lim) + ") print $1,$2}' " + f + '_' + str(step) + ".mds > filtered_subj")  
+        print('Population MDS displayed in "pop.pdf" file')
+        if sup_lim == '' or inf_lim == '':
+            print('Please check and specify desired cut-offs')
+            while True:
+                try:
+                    sup_lim = float(input(" Insert superior threshold on MDS component 1: "))
+                    inf_lim = float(input("Insert inferior threshold on MDS component 2: "))
+                except Exception as e:
+                    print(e)
+                    print("Retry")
+                    continue
+                break
+        
+        command("awk '{if($4 < " + str(sup_lim) + " && $5 > " + str(inf_lim) + ") print $1,$2}' " + f + '_' + str(step) + ".mds > filtered_subj")  
         command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex QC_{phase}/")  
         
         print("Filtering population from the original dataset")
@@ -463,59 +463,71 @@ def mds_covariates(step):
 if __name__ == '__main__':
     start_time = datetime.today()
     logging.basicConfig(format='%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s', datefmt='%Y-%m-%d,%H:%M:%S', level=logging.INFO, filename = f"trace_{start_time.strftime('%Y-%m-%d-%H:%M:%S')}.log")
-    f, threads, pop_f, panel_f, sex_strat, maf_threshold, rscripts, rm_tmp = gather_inputs()
+    f, threads, pop_f, panel_f, discard_sex, maf_threshold, rscripts, rm_tmp, sup_lim, inf_lim, config = collect_inputs()
 
     step = 1
+    
+    # this ensures a valid input file for whatever first step will be done
+    os.system(f'cp {f}.bim {f}_{step}.bim')
+    os.system(f'cp {f}.bed {f}_{step}.bed')
+    os.system(f'cp {f}.fam {f}_{step}.fam')
 
-    ## PHASE 1 (Missingness)
-    phase = 1
-    mkdir(phase)
-    step = missingness(step, rm_tmp)
-    print_info(phase, f"{f}_{step}")
+    # PHASE 1 (Missingness)
+    if config['Missingness'] == True:
+        phase = 1
+        mkdir(phase)
+        step = missingness(step, rm_tmp)
+        print_info(phase, f"{f}_{step}")
 
-    ## PHASE 2 (Sex discrepancy)
-    phase = 2
-    mkdir(phase)
-    step = sex_discrepancy(step, rm_tmp, sex_strat)
-    print_info(phase, f"{f}_{step}")
+    # PHASE 2 (Sex discrepancy)
+    if config['Sex_discrepancy'] == True:
+        phase = 2
+        mkdir(phase)
+        step = sex_discrepancy(step, rm_tmp, discard_sex)
+        print_info(phase, f"{f}_{step}")
 
+    # PHASE 3 (MAF filtration)
+    if config['Autos_MAF'] == True:
+        phase = 3
+        mkdir(phase)
+        step = maf(step, rm_tmp, maf_threshold)
+        print_info(phase, f"{f}_{step}")
 
-    ## PHASE 3 (MAF filtration)
-    phase = 3
-    mkdir(phase)
-    step = maf(step, rm_tmp, maf_threshold)
-    print_info(phase, f"{f}_{step}")
+    # PHASE 4 (Hardy-Weinberg Equilibrium)
+    if config['Hardy-Weinberg'] == True:
+        phase = 4
+        mkdir(phase)
+        step = hwe(step, rm_tmp)
+        print_info(phase, f"{f}_{step}")
 
-    ## PHASE 4 (Hardy-Weinberg Equilibrium)
-    phase = 4
-    mkdir(phase)
-    step = hwe(step, rm_tmp)
-    print_info(phase, f"{f}_{step}")
+    # PHASE 5 (Heterozygosity rate)
+    if config['Heterozygosity_rate'] == True:
+        phase = 5
+        mkdir(phase)
+        step = heterozygosity(step, rm_tmp)
+        print_info(phase, f"{f}_{step}")
 
-    ## PHASE 5 (Heterozygosity rate)
-    phase = 5
-    mkdir(phase)
-    step = heterozygosity(step, rm_tmp)
-    print_info(phase, f"{f}_{step}")
-
-    ## PHASE 6 (Cryptic Relatedness)
-    phase = 6
-    mkdir(phase)
-    step = cryptic_relatedness(step, rm_tmp)
-    print_info(phase, f"{f}_{step}")
+    # PHASE 6 (Cryptic relatedness)
+    if config['Cryptic_relatedness'] == True:
+        phase = 6
+        mkdir(phase)
+        step = cryptic_relatedness(step, rm_tmp)
+        print_info(phase, f"{f}_{step}")
 
     if len(pop_f)>0:
-        ## PHASE 7 (Population Stratification)
-        phase = 7
-        mkdir(phase)
-        step = population_stratification(step, rm_tmp)
-        print_info(phase, f"{f}_{step}")
+        # PHASE 7 (Population Filtration)
+        if config['Population_filtration'] == True:
+            phase = 7
+            mkdir(phase)
+            step = population_stratification(step, rm_tmp, sup_lim, inf_lim)
+            print_info(phase, f"{f}_{step}")
             
-    ## PHASE 8 (MDS Covariates)
-    phase = 8
-    mkdir(phase)
-    step = mds_covariates(step)  
-    print_info(phase, f"{f}_{step}")
+    # PHASE 8 (MDS Covariates)
+    if config['MDS_covariates'] == True:
+        phase = 8
+        mkdir(phase)
+        step = mds_covariates(step)  
+        print_info(phase, f"{f}_{step}")
         
     command(f"mv {f}_{step}.fam {f}-QC.fam")
     command(f"mv {f}_{step}.bim {f}-QC.bim")
@@ -526,6 +538,8 @@ if __name__ == '__main__':
         # created during merging
         command(f"rm {f}_*.map")
         command(f"rm {f}_*.ped")
-        command(f"rm {pop_f}_*")          
+        command(f"rm {pop_f}_*.fam")    
+        command(f"rm {pop_f}_*.bim")    
+        command(f"rm {pop_f}_*.bed")            
     
     print("DONE! You can proceed to imputation with 'imp_pheno.py'")
