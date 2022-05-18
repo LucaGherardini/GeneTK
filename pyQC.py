@@ -451,9 +451,10 @@ def population_stratification(step, rm_tmp, sup_lim, inf_lim):
                     print("Retry")
                     continue
                 break
+            logging.info(f"Superior and inferior thresholds: [{sup_lim}, {inf_lim}]")
         
         command("awk '{if($4 < " + str(sup_lim) + " && $5 > " + str(inf_lim) + ") print $1,$2}' " + f + '_' + str(step) + ".mds > filtered_subj")  
-        command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex Phase{phase}/")  
+        command(f"mv pop.pdf {f}_{step}.mds {f}_{step}.cluster* {f}_{step}.genome {f}_{step}.nosex Phase_{phase}/")  
         
         print("Filtering population from the original dataset")
         # Remove individuals from the pre-merged dataset (original_f)
@@ -557,7 +558,8 @@ if __name__ == '__main__':
     command(f"mv {f}_{step}.bim QC_{f}.bim")
     command(f"mv {f}_{step}.bed QC_{f}.bed")
     print(f'QC completed, the final files are QC_{f}')
-    command(f"rm {f}_*sex")
+    command(f"rm {f}_*.sex")
+    command(f"rm {f}_*.sexcheck")
     command(f"rm {f}*log")
     
     if rm_tmp and len(pop_f)>0:
