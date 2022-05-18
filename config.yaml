@@ -1,0 +1,23 @@
+
+baseline:                   ''          # baseline (without extension) of plink file
+cores:                      8
+sex_discrepancy_discard:    True        # after imputation, remove sex discrepancies or not
+MAF_threshold:              0.01
+rm_tmp:                     True         # remove temporary files while processing (Y/n)  
+
+# Steps selection
+Missingness:                True
+Sex_discrepancy:            True
+Autos_MAF:                  True
+Hardy-Weinberg:             True
+Heterozygosity_rate:        True
+Cryptic_relatedness:        True
+Population_filtering:       True
+MDS_covariates:             True
+
+# Optionals
+population_file:            '../1kG'
+population_panel:           '../1kG.ALL.panel'
+superior_threshold_MDS_1:   ''
+inferior_threshold_MDS_2:   ''
+  
