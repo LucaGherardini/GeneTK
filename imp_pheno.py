@@ -1,9 +1,17 @@
+"""
+SYNOPSIS
+    python3 imp_pheno.py <filename>
+"""
+
 import csv
 import os
+import sys
 
 inds = {}
 cl = {}
-base_name = input('Insert name without extension: ')
+
+base_name = input('Insert name without extension: ') if len(sys.argv)<2 else sys.argv[1]
+
 fam_file = base_name + '.fam'
 if not os.path.isfile(fam_file):
     print("This file doesn't exist!")
