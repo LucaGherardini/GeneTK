@@ -159,7 +159,7 @@ def missingness(step, rm_tmp):
     command(f"plink --memory {memory} --threads {threads} --bfile {f}_{step} --geno 0.2 --make-bed --out {f}_{step+1}")
     if rm_tmp: remove(f"{f}_{step}")
     step += 1
-    command(f"mv {f}_{step}.hh {f}_{step}.log Phase{phase}/")
+    command(f"mv {f}_{step}.hh {f}_{step}.log Phase_{phase}/")
 
     # Delete Individuals with missingness >0.2 
     print("--- STEP " +str(step))
@@ -194,7 +194,7 @@ def sex_discrepancy(step, rm_tmp, discard_sex):
     command(f"plink --memory {memory} --threads {threads} --bfile {f}_{step} --impute-sex --make-bed --out {f}_{step+1}")   
     if rm_tmp: remove(f"{f}_{step}")
     step += 1 
-    command(f"mv {f}_{step}.log {f}_{step}.hh Phase{phase}/")
+    command(f"mv {f}_{step}.log {f}_{step}.hh Phase_{phase}/")
     
     # Sex is checked after imputation or before discarding discrepancies    
     command(f"plink --memory {memory} --threads {threads} --bfile {f}_{step} --check-sex")
@@ -325,7 +325,7 @@ def population_stratification(step, rm_tmp, inf_lim_mds_1, sup_lim_mds_1, inf_li
 
     print("Preprocessing of population file")
     command(f"plink --memory {memory} --allow-no-sex  --threads {threads} --bfile {pop_f} --geno 0.2 --make-bed --out {pop_f}_{pop_step}")
-    command(f"mv {pop_f}_{pop_step}.log Phase{phase}/")
+    command(f"mv {pop_f}_{pop_step}.log Phase_{phase}/")
     
     command(f"plink --memory {memory} --allow-no-sex  --threads {threads} --bfile {pop_f}_{pop_step} --mind 0.2 --make-bed --out {pop_f}_{pop_step+1}")
     if rm_tmp: remove(f"{pop_f}_{pop_step}")
