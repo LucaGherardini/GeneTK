@@ -57,8 +57,8 @@ with open(out_file, 'w') as f:
 
 print(f"*** File stored as {out_file} ***")
 print(f'*** Changing phenotype in {base_name} through plink ***')
-os.system(f"plink --bfile {base_name} --pheno {out_file} --mpheno 3 --make-just-fam --out {base_name}")
-
+os.system(f"plink --bfile {base_name} --pheno {out_file} --mpheno 3 --make-bed --out imp_{base_name}")
+fam_file = 'imp_' + fam_file
 print("*** Generating lists ***")
 for cat in status_phenotype.keys():
     # NOTE in cl.txt the phenotype is in the 5th column, in the .fam in the 6th
@@ -72,6 +72,6 @@ except Exception:
     prune_pheno = 'Y'
 
 if prune_pheno != 'n' and prune_pheno != 'N':
-    os.system(f"plink --bfile {base_name} --prune --make-just-fam --out {base_name}")
+    os.system(f"plink --bfile imp_{base_name} --prune --make-bed --out prun_{base_name}")
 
 print('*** Done ***')

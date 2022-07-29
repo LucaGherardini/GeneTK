@@ -3,7 +3,7 @@ baseline:                   ''          # baseline (without extension) of plink 
 threads:                    8
 memory:                     16384       # Memory, in MB, allowed to plink invocations
 sex_discrepancy_discard:    True        # after imputation, remove sex discrepancies or not
-MAF_threshold:              0.01
+MAF_threshold:              0.05
 rm_tmp:                     True         # remove temporary files while processing (Y/n)  
 
 # Steps selection

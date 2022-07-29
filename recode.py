@@ -11,4 +11,5 @@ files = str(output.stdout.read()).replace('b\'', '').replace("\'", '').replace('
 print(files)
 for f in files:
     os.system(f"sed -r \'s/rs\S+/./\t\' {f}.bim > tmp.bim && mv tmp.bim {f}.bim")
-    os.system(f"plink --threads {threads} --bfile {f} --set-missing-var-ids @:#[b37]\$1,\$2 --make-bed --out rec_{f}")
+    # NOTE: the character '_' is used as allele separator because of bimbam compatibility
+    os.system(f"plink --threads {threads} --bfile {f} --set-missing-var-ids @:#[b37]\$1_\$2 --make-bed --out rec_{f}")
